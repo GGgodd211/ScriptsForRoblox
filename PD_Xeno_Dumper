@@ -1,0 +1,59 @@
+-- Скрипт-дампер для Xeno (Project Delta)
+-- Запустите в игре. Результат будет в буфере обмена или в файле.
+
+local dump = {"===== ДАМП PROJECT DELTA ДЛЯ XENO ====="}
+local function addLine(l) table.insert(dump, l) end
+local function addSection(title) addLine("\n----- " .. title .. " -----") end
+
+-- 1. Информация об игре
+addSection("ОБЩАЯ ИНФОРМАЦИЯ")
+addLine("Игрок: " .. tostring(game:GetService("Players").LocalPlayer))
+addLine("GameId: " .. game.GameId)
+addLine("PlaceId: " .. game.PlaceId)
+
+-- 2. Remote Events (важно для античита)
+addSection("REMOTE EVENTS")
+for _, obj in ipairs(game:GetDescendants()) do
+    if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+        addLine(obj:GetFullName())
+    end
+end
+
+-- 3. Скрипты (пытаемся получить исходники)
+addSection("СКРИПТЫ")
+local scriptsFound = 0
+for _, obj in ipairs(game:GetDescendants()) do
+    if obj:IsA("LocalScript") or obj:IsA("ModuleScript") then
+        scriptsFound = scriptsFound + 1
+        local name = obj:GetFullName()
+        local src = ""
+        -- Пробуем разные методы
+        pcall(function()
+            if getsrc then
+                src = getsrc(obj)
+            elseif obj.Source and obj.Source ~= "" then
+                src = obj.Source
+            elseif getscriptbytecode then
+                local bc = getscriptbytecode(obj)
+                if bc then
+                    src = "--- БАЙТКОД (не декодирован) ---\n" .. tostring(bc)
+                end
+            end
+        end)
+        if src == "" then src = "[КОД НЕДОСТУПЕН]" end
+        addLine(name .. "\n" .. src)
+    end
+end
+addLine("Всего скриптов найдено: " .. scriptsFound)
+
+-- 4. Сохранение
+local output = table.concat(dump, "\n")
+local ok, err = pcall(writefile, "ProjectDelta_Xeno_Dump.txt", output)
+if ok then
+    print("Файл сохранён: ProjectDelta_Xeno_Dump.txt (в папке Xeno/workspace)")
+else
+    -- Если writefile не работает, используем буфер обмена
+    pcall(setclipboard, output)
+    print("Данные скопированы в буфер обмена. Вставьте в блокнот и сохраните как .txt")
+end
+print("Готово. Отправьте файл или текст мне.")
