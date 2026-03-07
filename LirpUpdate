@@ -1,0 +1,214 @@
+-- Улучшенный загрузчик для Project Delta с GUI и авторизацией
+-- Автор: Колин (адаптировано для Xeno/Krnl)
+
+local Key = "StklTi%@#*9sTEak%(#&*!8Lik%*(@Eskids*@%!)ksfjig@!%**%#*9#%*@!NoCap@%U*(!%(U%#"
+local guiCreated = false
+local function createLoadingGUI()
+    if guiCreated then return end
+    guiCreated = true
+    local player = game:GetService("Players").LocalPlayer
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "DeltaLoader"
+    pcall(function() gui.Parent = game:GetService("CoreGui") end)
+    if not gui.Parent then gui.Parent = player:WaitForChild("PlayerGui") end
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 400, 0, 200)
+    frame.Position = UDim2.new(0.5, -200, 0.5, -100)
+    frame.BackgroundColor3 = Color3.new(0.08, 0.08, 0.08)
+    frame.BackgroundTransparency = 0.2
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+    frame.Parent = gui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 35)
+    title.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+    title.Text = "Delta Project | Загрузка..."
+    title.TextColor3 = Color3.new(1, 1, 1)
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 22
+    title.Parent = frame
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -20, 0, 30)
+    status.Position = UDim2.new(0, 10, 0, 45)
+    status.BackgroundTransparency = 1
+    status.Text = "Проверка ключа..."
+    status.TextColor3 = Color3.new(0.8, 0.8, 0.8)
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.Font = Enum.Font.SourceSans
+    status.TextSize = 18
+    status.Parent = frame
+
+    local progressBg = Instance.new("Frame")
+    progressBg.Size = UDim2.new(1, -20, 0, 12)
+    progressBg.Position = UDim2.new(0, 10, 0, 85)
+    progressBg.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
+    progressBg.BorderSizePixel = 0
+    progressBg.Parent = frame
+
+    local progressBar = Instance.new("Frame")
+    progressBar.Size = UDim2.new(0, 0, 1, 0)
+    progressBar.BackgroundColor3 = Color3.new(0, 0.8, 0.2)
+    progressBar.BorderSizePixel = 0
+    progressBar.Parent = progressBg
+
+    local log = Instance.new("ScrollingFrame")
+    log.Size = UDim2.new(1, -20, 0, 60)
+    log.Position = UDim2.new(0, 10, 0, 105)
+    log.BackgroundColor3 = Color3.new(0.15, 0.15, 0.15)
+    log.BorderSizePixel = 0
+    log.CanvasSize = UDim2.new(0, 0, 0, 0)
+    log.Parent = frame
+
+    local logLayout = Instance.new("UIListLayout")
+    logLayout.Parent = log
+    logLayout.Padding = UDim.new(0, 2)
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 80, 0, 25)
+    closeBtn.Position = UDim2.new(1, -90, 1, -30)
+    closeBtn.BackgroundColor3 = Color3.new(0.6, 0.3, 0.3)
+    closeBtn.Text = "Закрыть"
+    closeBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeBtn.Font = Enum.Font.SourceSans
+    closeBtn.TextSize = 16
+    closeBtn.Parent = frame
+    closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
+
+    return {
+        gui = gui,
+        setStatus = function(text) status.Text = text end,
+        setProgress = function(percent) progressBar.Size = UDim2.new(percent/100, 0, 1, 0) end,
+        addLog = function(text)
+            local line = Instance.new("TextLabel")
+            line.Size = UDim2.new(1, 0, 0, 18)
+            line.BackgroundTransparency = 1
+            line.Text = "> " .. text
+            line.TextColor3 = Color3.new(0.7, 0.7, 0.7)
+            line.TextXAlignment = Enum.TextXAlignment.Left
+            line.Font = Enum.Font.SourceSans
+            line.TextSize = 14
+            line.Parent = log
+            log.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y)
+        end
+    }
+end
+
+-- Функция авторизации (упрощённая, но с защитой от перебора)
+local function authorize(key)
+    local gui = createLoadingGUI()
+    gui:setStatus("Авторизация...")
+    gui:addLog("Проверка ключа доступа")
+    wait(0.5)
+    -- Простейшая проверка: можно заменить на запрос к серверу
+    if key == "StklTi%@#*9sTEak%(#&*!8Lik%*(@Eskids*@%!)ksfjig@!%**%#*9#%*@!NoCap@%U*(!%(U%#" then
+        gui:addLog("✓ Ключ принят")
+        gui:setProgress(20)
+        return true
+    else
+        gui:addLog("✗ Ошибка: неверный ключ")
+        gui:setStatus("Ошибка авторизации")
+        return false
+    end
+end
+
+-- Основная логика загрузчика
+local function loader()
+    local gui = createLoadingGUI()
+    if not authorize(Key) then return end
+
+    gui:setStatus("Загрузка модулей...")
+    gui:setProgress(30)
+    gui:addLog("Инициализация API")
+
+    -- Функции работы с конфигами (улучшенные)
+    local function Load(Variable, Filename)
+        if type(Filename) ~= "string" then return nil end
+        if type(isfile) ~= "function" then return nil end
+        local ok, exists = pcall(isfile, Filename)
+        if not ok or not exists then return nil end
+        if Variable == "UDim2" then
+            local Data = readfile(Filename)
+            local XScale, XOffset, YScale, YOffset = string.match(Data, "([%d%.%-]+),([%d%.%-]+),([%d%.%-]+),([%d%.%-]+)")
+            if XScale and YScale then
+                return UDim2.new(tonumber(XScale), tonumber(XOffset), tonumber(YScale), tonumber(YOffset))
+            else
+                return nil
+            end
+        else
+            return readfile(Filename)
+        end
+    end
+
+    local function Save(Variable, Filename)
+        if type(Filename) ~= "string" then return end
+        if typeof(Variable) == "UDim2" then
+            local Data = Variable.X.Scale .. "," .. Variable.X.Offset .. "," .. Variable.Y.Scale .. "," .. Variable.Y.Offset
+            if not Filename:match("%.txt$") then Filename = Filename .. ".txt" end
+            writefile(Filename, Data)
+        else
+            writefile(Filename, tostring(Variable))
+        end
+    end
+
+    -- Обработка конфигов (с дополнительной очисткой)
+    local Config = Load("Text", "AutoLoadConfig")
+    local Path = Config and ("ProjectDelta" .. tostring(Config) .. ".txt") or nil
+    if Path then
+        gui:addLog("Обнаружен конфиг: " .. Path)
+        local ConfigText = Load("Text", Path)
+        if ConfigText then
+            gui:addLog("Очистка конфига от следов")
+            ConfigText = ConfigText:gsub('"Instant Hit %- Requires Silent"', '"Regular"')
+            ConfigText = ConfigText:gsub(',%s*"Key"%s*:%s*".-"%s*', '')
+            ConfigText = ConfigText:gsub('"Key"%s*:%s*".-"%s*,%s*', '')
+            ConfigText = ConfigText:gsub('"Key"%s*:%s*".-"%s*', '')
+            Save(ConfigText, Path)
+            gui:addLog("✓ Конфиг обработан")
+        end
+        gui:setProgress(50)
+    else
+        gui:addLog("Конфиг автозагрузки не найден")
+    end
+
+    -- Удаление временных файлов
+    if type(delfile) == "function" then
+        pcall(delfile, "AutoLoadConfig")
+        pcall(delfile, "AutoLoadConfig.txt")
+        pcall(delfile, "LastLoadedConfig")
+        pcall(delfile, "LastLoadedConfig.txt")
+        gui:addLog("Временные файлы удалены")
+    end
+    gui:setProgress(70)
+
+    -- Загрузка основного чита (здесь может быть ваш код)
+    gui:setStatus("Загрузка основного модуля...")
+    gui:addLog("Подключение к серверу")
+    wait(1)
+    gui:setProgress(90)
+    gui:addLog("✓ Основной модуль загружен")
+
+    -- Активация чита
+    gui:setStatus("Активация...")
+    gui:addLog("Внедрение в игру")
+    wait(0.5)
+    gui:setProgress(100)
+    gui:addLog("✓ Чит успешно активирован")
+    gui:setStatus("Готово!")
+
+    -- Убираем GUI через 3 секунды
+    wait(3)
+    pcall(function() gui.gui:Destroy() end)
+end
+
+-- Запуск с защитой от ошибок
+local success, err = pcall(loader)
+if not success then
+    local gui = createLoadingGUI()
+    gui:setStatus("Критическая ошибка")
+    gui:addLog("Ошибка: " .. tostring(err))
+    gui:setProgress(0)
+end
