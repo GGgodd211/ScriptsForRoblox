@@ -1,0 +1,384 @@
+--[[
+    Ultimate AntiAFK + FPS + Ping Monitor
+    Roblox 2025-2026 | Fixed version (linter clean)
+    Features: Modern GUI, Anti-AFK (multiple methods), Real-time FPS/Ping/Session,
+              FPS Boost (Low Graphics), Auto Rejoin, Dragable UI
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Stats = game:GetService("Stats")
+local TeleportService = game:GetService("TeleportService")
+local GuiService = game:GetService("GuiService")
+local VirtualUser = game:GetService("VirtualUser")
+local CoreGui = game:GetService("CoreGui")
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ====================== CONFIG ======================
+local Config = {
+    AntiAFK = true,
+    FPSBoost = true,
+    ShowFPS = true,
+    ShowPing = true,
+    ShowSession = true,
+    AutoRejoin = true,
+    LowGraphics = true,
+    MemoryCleanInterval = 45, -- seconds
+    AntiAFKMethod = "Idled+Virtual", -- "Idled", "Virtual", "Idled+Virtual", "Camera"
+    ToggleKey = Enum.KeyCode.RightShift,
+    GUIVisible = true
+}
+
+-- ====================== STATE ======================
+local State = {
+    FPS = 0,
+    Ping = 0,
+    SessionStart = tick(),
+    LastAFKAction = 0,
+    IsRunning = true,
+    Connections = {}
+}
+
+-- ====================== UTILS ======================
+local function Create(class, props)
+    local obj = Instance.new(class)
+    for k, v in pairs(props or {}) do
+        obj[k] = v
+    end
+    return obj
+end
+
+-- ====================== ANTI-AFK CORE ======================
+local function SetupAntiAFK()
+    -- Classic Idled protection (most reliable 2025-2026)
+    table.insert(State.Connections, LocalPlayer.Idled:Connect(function()
+        if not Config.AntiAFK then return end
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+        State.LastAFKAction = tick()
+    end))
+
+    -- Extra VirtualInput fallback (for stubborn games)
+    task.spawn(function()
+        while State.IsRunning do
+            if Config.AntiAFK and Config.AntiAFKMethod:find("Virtual") then
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new(math.random(10, 100), math.random(10, 100)))
+                end)
+            end
+            if Config.AntiAFK and Config.AntiAFKMethod:find("Camera") then
+                pcall(function()
+                    Camera.CFrame = Camera.CFrame * CFrame.Angles(0, math.rad(0.05), 0)
+                end)
+            end
+            task.wait(math.random(12, 25)) -- humanized delay
+        end
+    end)
+end
+
+-- ====================== STATS MONITOR ======================
+local function UpdateStats()
+    -- FPS
+    local last = tick()
+    local frames = 0
+    table.insert(State.Connections, RunService.RenderStepped:Connect(function()
+        frames += 1
+        if tick() - last >= 1 then
+            State.FPS = frames
+            frames = 0
+            last = tick()
+        end
+    end))
+
+    -- Ping + Session
+    task.spawn(function()
+        while State.IsRunning do
+            local pingItem = Stats.Network.ServerStatsItem["Data Ping"]
+            State.Ping = pingItem and math.floor(pingItem:GetValue()) or 0
+            task.wait(0.5)
+        end
+    end)
+end
+
+-- ====================== PERFORMANCE BOOST ======================
+local function ApplyFPSBoost()
+    if not Config.FPSBoost then return end
+
+    if Config.LowGraphics then
+        pcall(function()
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            Lighting.Brightness = 2
+            for _, v in pairs(Lighting:GetChildren()) do
+                if v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") then
+                    v.Enabled = false
+                end
+            end
+            workspace.Terrain.WaterWaveSize = 0
+            workspace.Terrain.WaterWaveSpeed = 0
+            workspace.Terrain.WaterReflectance = 0
+            workspace.Terrain.WaterTransparency = 1
+        end)
+    end
+
+    -- Soft memory clean (без collectgarbage — чисто под linter)
+    task.spawn(function()
+        while State.IsRunning and Config.FPSBoost do
+            task.wait(Config.MemoryCleanInterval)
+            -- можно добавить дополнительные оптимизации здесь при необходимости
+        end
+    end)
+end
+
+-- ====================== AUTO REJOIN ======================
+local function SetupAutoRejoin()
+    if not Config.AutoRejoin then return end
+    table.insert(State.Connections, GuiService.ErrorMessageChanged:Connect(function()
+        if GuiService:GetErrorMessage() ~= "" then
+            task.wait(1.5)
+            pcall(function()
+                TeleportService:Teleport(game.PlaceId, LocalPlayer)
+            end)
+        end
+    end))
+end
+
+-- ====================== MODERN GUI ======================
+local ScreenGui, MainFrame, TitleBar, Content, StatusLabel, FPSLabel, PingLabel, SessionLabel, ToggleBtn
+
+local function CreateGUI()
+    if CoreGui:FindFirstChild("UltimateAntiAFK_GUI") then
+        CoreGui.UltimateAntiAFK_GUI:Destroy()
+    end
+
+    ScreenGui = Create("ScreenGui", {
+        Name = "UltimateAntiAFK_GUI",
+        ResetOnSpawn = false,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        Parent = CoreGui
+    })
+
+    MainFrame = Create("Frame", {
+        Name = "Main",
+        Size = UDim2.new(0, 320, 0, 280),
+        Position = UDim2.new(0.5, -160, 0.5, -140),
+        BackgroundColor3 = Color3.fromRGB(18, 18, 22),
+        BorderSizePixel = 0,
+        Parent = ScreenGui
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = MainFrame})
+    Create("UIStroke", {
+        Color = Color3.fromRGB(80, 140, 255),
+        Thickness = 1.5,
+        Transparency = 0.3,
+        Parent = MainFrame
+    })
+
+    -- Title Bar
+    TitleBar = Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 42),
+        BackgroundColor3 = Color3.fromRGB(28, 28, 35),
+        BorderSizePixel = 0,
+        Parent = MainFrame
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 12), Parent = TitleBar})
+    Create("Frame", {
+        Size = UDim2.new(1, 0, 0, 12),
+        Position = UDim2.new(0, 0, 1, -12),
+        BackgroundColor3 = Color3.fromRGB(28, 28, 35),
+        BorderSizePixel = 0,
+        Parent = TitleBar
+    })
+
+    Create("TextLabel", {
+        Size = UDim2.new(1, -50, 1, 0),
+        Position = UDim2.new(0, 14, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "⚡ Ultimate AntiAFK 2026",
+        TextColor3 = Color3.fromRGB(100, 180, 255),
+        TextSize = 16,
+        Font = Enum.Font.GothamBold,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = TitleBar
+    })
+
+    local CloseBtn = Create("TextButton", {
+        Size = UDim2.new(0, 32, 0, 32),
+        Position = UDim2.new(1, -38, 0.5, -16),
+        BackgroundColor3 = Color3.fromRGB(40, 40, 50),
+        Text = "×",
+        TextColor3 = Color3.fromRGB(255, 100, 100),
+        TextSize = 22,
+        Font = Enum.Font.GothamBold,
+        Parent = TitleBar
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = CloseBtn})
+
+    -- Content
+    Content = Create("Frame", {
+        Size = UDim2.new(1, -20, 1, -60),
+        Position = UDim2.new(0, 10, 0, 50),
+        BackgroundTransparency = 1,
+        Parent = MainFrame
+    })
+
+    local function MakeStat(y, name, color)
+        local frame = Create("Frame", {
+            Size = UDim2.new(1, 0, 0, 36),
+            Position = UDim2.new(0, 0, 0, y),
+            BackgroundColor3 = Color3.fromRGB(28, 28, 36),
+            BorderSizePixel = 0,
+            Parent = Content
+        })
+        Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = frame})
+        
+        Create("TextLabel", {
+            Size = UDim2.new(0.45, 0, 1, 0),
+            Position = UDim2.new(0, 12, 0, 0),
+            BackgroundTransparency = 1,
+            Text = name,
+            TextColor3 = Color3.fromRGB(180, 180, 190),
+            TextSize = 14,
+            Font = Enum.Font.Gotham,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = frame
+        })
+        
+        local value = Create("TextLabel", {
+            Size = UDim2.new(0.5, 0, 1, 0),
+            Position = UDim2.new(0.45, 0, 0, 0),
+            BackgroundTransparency = 1,
+            Text = "—",
+            TextColor3 = color,
+            TextSize = 15,
+            Font = Enum.Font.GothamBold,
+            TextXAlignment = Enum.TextXAlignment.Right,
+            Parent = frame
+        })
+        return value
+    end
+
+    StatusLabel = MakeStat(0, "Status", Color3.fromRGB(80, 255, 120))
+    FPSLabel = MakeStat(44, "FPS", Color3.fromRGB(100, 200, 255))
+    PingLabel = MakeStat(88, "Ping", Color3.fromRGB(255, 200, 80))
+    SessionLabel = MakeStat(132, "Session", Color3.fromRGB(200, 160, 255))
+
+    -- Toggle AntiAFK
+    ToggleBtn = Create("TextButton", {
+        Size = UDim2.new(1, 0, 0, 38),
+        Position = UDim2.new(0, 0, 0, 185),
+        BackgroundColor3 = Color3.fromRGB(40, 120, 80),
+        Text = "AntiAFK: ON",
+        TextColor3 = Color3.fromRGB(255, 255, 255),
+        TextSize = 14,
+        Font = Enum.Font.GothamBold,
+        Parent = Content
+    })
+    Create("UICorner", {CornerRadius = UDim.new(0, 8), Parent = ToggleBtn})
+
+    -- Drag
+    local dragging, dragStart, startPos
+    TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+        end
+    end)
+    TitleBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    -- Buttons
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui.Enabled = false
+        Config.GUIVisible = false
+    end)
+
+    ToggleBtn.MouseButton1Click:Connect(function()
+        Config.AntiAFK = not Config.AntiAFK
+        ToggleBtn.Text = Config.AntiAFK and "AntiAFK: ON" or "AntiAFK: OFF"
+        ToggleBtn.BackgroundColor3 = Config.AntiAFK and Color3.fromRGB(40, 120, 80) or Color3.fromRGB(120, 50, 50)
+    end)
+
+    -- Hotkey
+    UserInputService.InputBegan:Connect(function(input, gpe)
+        if gpe then return end
+        if input.KeyCode == Config.ToggleKey then
+            Config.GUIVisible = not Config.GUIVisible
+            ScreenGui.Enabled = Config.GUIVisible
+        end
+    end)
+end
+
+local function UpdateGUI()
+    task.spawn(function()
+        while State.IsRunning do
+            if StatusLabel then
+                StatusLabel.Text = Config.AntiAFK and "ACTIVE" or "DISABLED"
+                StatusLabel.TextColor3 = Config.AntiAFK and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 100, 100)
+            end
+            if FPSLabel then
+                FPSLabel.Text = tostring(State.FPS)
+                FPSLabel.TextColor3 = State.FPS >= 60 and Color3.fromRGB(80, 255, 120) or State.FPS >= 30 and Color3.fromRGB(255, 200, 80) or Color3.fromRGB(255, 80, 80)
+            end
+            if PingLabel then
+                PingLabel.Text = State.Ping .. " ms"
+                PingLabel.TextColor3 = State.Ping <= 80 and Color3.fromRGB(80, 255, 120) or State.Ping <= 150 and Color3.fromRGB(255, 200, 80) or Color3.fromRGB(255, 80, 80)
+            end
+            if SessionLabel then
+                local mins = math.floor((tick() - State.SessionStart) / 60)
+                local secs = math.floor((tick() - State.SessionStart) % 60)
+                SessionLabel.Text = string.format("%02d:%02d", mins, secs)
+            end
+            task.wait(0.25)
+        end
+    end)
+end
+
+-- ====================== INIT ======================
+local function Init()
+    CreateGUI()
+    SetupAntiAFK()
+    UpdateStats()
+    ApplyFPSBoost()
+    SetupAutoRejoin()
+    UpdateGUI()
+
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "Ultimate AntiAFK 2026",
+            Text = "Loaded | RightShift = Toggle GUI",
+            Duration = 5
+        })
+    end)
+
+    print("[Ultimate AntiAFK] Loaded successfully | Method:", Config.AntiAFKMethod)
+end
+
+Init()
+
+-- Cleanup
+Players.PlayerRemoving:Connect(function(p)
+    if p == LocalPlayer then
+        State.IsRunning = false
+        for _, c in pairs(State.Connections) do
+            pcall(function() c:Disconnect() end)
+        end
+    end
+end)
